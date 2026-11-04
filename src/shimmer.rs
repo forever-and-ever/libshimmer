@@ -108,8 +108,8 @@ impl Shimmer {
 
     /// Hears `sound`, what the host heard since it last called: mono samples at [`SAMPLE_RATE`],
     /// nominally from −1 to 1, of which samples that are not finite are silent. A recipe that
-    /// [listens](Recipe::listens) paints the latest, and the host's work once none arrive for a
-    /// moment.
+    /// [listens](Recipe::listens) paints the latest, and a quiet motion of its own once none arrive
+    /// for a moment.
     ///
     /// [`SAMPLE_RATE`]: crate::SAMPLE_RATE
     pub fn hear(&mut self, sound: &[f32]) {

@@ -1,12 +1,13 @@
 //! Hi-fi: the caption is a hi-fi's spectrum analyzer, its letters the bands of whatever plays, bass
 //! to treble, lit from blue through magenta to amber as they rise, and its mark a hi-fi's LED bars.
-//! In silence it plays the host's work instead; at rest it plays on, quieter and grey.
+//! In silence a lone soliton glides down the caption every two seconds or so, taller and quicker
+//! the harder the host works; at rest it plays on, quieter and grey.
 
 use std::f64::consts::TAU;
 
 use super::USER;
 use crate::SAMPLE_RATE;
-use crate::kit::{AZURE, MAGENTA, PINK, SUN, TANGERINE, VIOLET, hash, lag, noise, ramp, real};
+use crate::kit::{AZURE, MAGENTA, PINK, SUN, TANGERINE, VIOLET, hash, lag, ramp, real};
 use crate::paint::{Ink, Palette, Rgb};
 use crate::recipe::{Glyphs, Recipe};
 use crate::rest::DRAG;
@@ -35,7 +36,7 @@ const RANGE: f64 = 36.0;
 const GATE: f64 = -72.0;
 /// Decibels a second the ceiling sinks after the loudest sound.
 const SINK: f64 = 4.0;
-/// Seconds without sound before the meter plays the host's work instead.
+/// Seconds without sound before the meter falls silent.
 const DEAF: f64 = 0.25;
 /// Seconds a rising band takes to reach its level, and the share of the scale a falling band
 /// drops in a second.
@@ -49,7 +50,15 @@ const FLASH: f64 = 0.7;
 const SPARK: f64 = 0.35;
 /// The share of its height each band keeps at rest, as though the music were turned down.
 const QUIET: f64 = 0.6;
-/// Quanta a second that drive the host's work to the top of the scale.
+/// Seconds between solitons in silence, on average.
+const GAP: f64 = 2.0;
+/// A soliton's height while the host is still, and the height the host's brisk work adds.
+const SWELL: f64 = 0.28;
+const SURGE: f64 = 0.2;
+/// Letters a second a soliton `SWELL` high glides, and letters it spans about its crest.
+const GLIDE: f64 = 10.0;
+const SPAN: f64 = 1.5;
+/// Quanta a second of the host's work that make a soliton its strongest.
 const BRIGHT: f64 = 90.0;
 /// The lamps' colors from the bottom of the scale to the top.
 const LAMPS: [Rgb; 6] = [AZURE, VIOLET, MAGENTA, PINK, TANGERINE, SUN];
@@ -71,6 +80,10 @@ struct HiFi {
     holds: [f64; BANDS],
     /// The top of the meter's scale, in decibels of a full-scale sine.
     ceiling: f64,
+    /// The solitons gliding down the caption in silence, when the next sets out, and how many have.
+    solitons: Vec<Soliton>,
+    next: f64,
+    waves: i64,
     seed: i64,
 }
 
@@ -110,6 +123,9 @@ impl HiFi {
             peaks: [0.0; BANDS],
             holds: [0.0; BANDS],
             ceiling: GATE + RANGE,
+            solitons: Vec::new(),
+            next: 0.0,
+            waves: 0,
             seed: seed.cast_signed(),
         }
     }
@@ -152,28 +168,6 @@ impl HiFi {
         let floor = self.ceiling - RANGE;
         Some(decibels.map(|level| ((level - floor) / RANGE).clamp(0.0, 1.0)))
     }
-
-    /// The host's work as a spectrum, for when nothing plays: hills that swell with the flow, and a
-    /// band struck by each fresh quantum.
-    fn imagine(&self, stage: &Stage) -> [f64; BANDS] {
-        let t = stage.t;
-        let drive = match stage.spell {
-            Spell::Busy => (stage.flow(/*window*/ 0.5) / BRIGHT).clamp(0.0, 1.0),
-            Spell::Wait => 0.18 + 0.08 * (TAU * t / 2.4).sin(),
-            Spell::Idle => 0.08,
-        };
-        let mut heights: [f64; BANDS] = std::array::from_fn(|band| {
-            drive * (0.25 + 0.6 * noise(0.22 * real(band) - 0.9 * t, self.seed))
-        });
-        if stage.busy() {
-            for back in 0..u64::from(stage.fresh()).min(6) {
-                let quantum = stage.quanta.wrapping_sub(back).cast_signed();
-                let band = notch(hash(self.seed ^ quantum) * real(BANDS), BANDS);
-                heights[band] = heights[band].max(0.5 + 0.45 * drive);
-            }
-        }
-        heights
-    }
 }
 
 impl Shader for HiFi {
@@ -190,7 +184,8 @@ impl Shader for HiFi {
         } else {
             None
         };
-        let targets = heard.unwrap_or_else(|| self.imagine(stage));
+        let silent = heard.is_none();
+        let targets = heard.unwrap_or([0.0; BANDS]);
         for (band, target) in targets.into_iter().enumerate() {
             let target = gain * target;
             let height = &mut self.heights[band];
@@ -208,6 +203,27 @@ impl Shader for HiFi {
                 self.peaks[band] = (self.peaks[band] - DROP * dt).max(*height);
             }
         }
+        // In silence a lone soliton sets out now and then, stronger the harder the host works;
+        // while sound plays, the next waits half a gap.
+        let t = stage.t;
+        if !silent {
+            self.next = t + GAP / 2.0;
+        } else if t >= self.next {
+            let drive = if stage.spell == Spell::Busy {
+                (stage.flow(/*window*/ 0.5) / BRIGHT).clamp(0.0, 1.0)
+            } else {
+                0.0
+            };
+            self.solitons.push(Soliton {
+                born: t,
+                height: SWELL + SURGE * drive,
+            });
+            self.next = t + GAP * (0.75 + 0.5 * hash(self.seed ^ self.waves));
+            self.waves += 1;
+        }
+        let end = real(stage.caption.len());
+        self.solitons
+            .retain(|soliton| soliton.crest(t) < end + 2.0 * soliton.width());
     }
 
     fn status(&self, stage: &Stage, palette: Palette, canvas: &mut Canvas) {
@@ -237,10 +253,17 @@ impl Shader for HiFi {
             })
             .collect();
         let count = real(stage.caption.len().max(1));
+        // at rest the solitons too play as though turned down
+        let gain = if resting { QUIET } else { 1.0 };
         canvas.letters = stage.letters(|index, _| {
             let x = (real(index) + 0.5) / count;
+            let wave = self
+                .solitons
+                .iter()
+                .map(|soliton| gain * soliton.at(real(index) + 0.5, stage.t))
+                .fold(0.0, f64::max);
             lamp(
-                sample(&self.heights, x),
+                sample(&self.heights, x).max(wave),
                 sample(&self.peaks, x),
                 hue,
                 palette,
@@ -252,6 +275,33 @@ impl Shader for HiFi {
         let loudness = self.heights.iter().sum::<f64>() / real(BANDS);
         let glow = palette.legible(ramp(&LAMPS, loudness));
         Ink::of('♪').fg(glow.blend(palette.grey(0.5), 0.3 + 0.7 * loudness))
+    }
+}
+
+/// A solitary wave gliding down the caption in silence: as on shallow water, a taller one is
+/// quicker and narrower.
+struct Soliton {
+    /// When it set out, in shimmer time.
+    born: f64,
+    /// Its height on the meter, out of 1.
+    height: f64,
+}
+
+impl Soliton {
+    /// Letters it spans about its crest.
+    fn width(&self) -> f64 {
+        SPAN * (SWELL / self.height).sqrt()
+    }
+
+    /// Its crest's place at `t`, in letters from the caption's start, which it nears from before
+    /// the first.
+    fn crest(&self, t: f64) -> f64 {
+        GLIDE * self.height / SWELL * (t - self.born) - 2.0 * self.width()
+    }
+
+    /// Its height at `x` letters from the caption's start, at `t`.
+    fn at(&self, x: f64, t: f64) -> f64 {
+        self.height / ((x - self.crest(t)) / self.width()).cosh().powi(2)
     }
 }
 
