@@ -14,8 +14,10 @@
 //! and keeps no global state.
 //!
 //! A host that learns of work in lumps can smooth them with a [`Reservoir`], and a picker can
-//! preview a recipe by playing the [`script`]. The companion crate libshimmer-ratatui converts a
-//! row into ratatui spans and lays its backdrop into a ratatui buffer.
+//! preview a recipe by playing the [`script`]. A host that hears sound, such as what its speakers
+//! play, passes it to [`Shimmer::hear`], and a recipe that [listens](Recipe::listens) paints it.
+//! The companion crate libshimmer-ratatui converts a row into ratatui spans and lays its backdrop
+//! into a ratatui buffer.
 //!
 //! ```
 //! use std::time::Duration;
@@ -59,6 +61,9 @@ pub const TICK: Duration = Duration::from_millis(32);
 
 /// A gap between frames longer than this advances a shimmer by one tick, as after a pause in drawing.
 pub const STALE: Duration = Duration::from_secs(1);
+
+/// Samples a second of the sound a host passes to [`Shimmer::hear`].
+pub const SAMPLE_RATE: u32 = 48_000;
 
 // P13: a host may keep a shimmer on any thread.
 const _: () = {

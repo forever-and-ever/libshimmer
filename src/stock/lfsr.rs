@@ -20,6 +20,7 @@ pub(super) const RECIPE: Recipe = Recipe {
     blurb: "a primitive polynomial shifts text",
     credit: USER,
     needs: Glyphs::BASE,
+    listens: false,
     summon: |seed| Box::new(Lfsr::new(seed)),
 };
 

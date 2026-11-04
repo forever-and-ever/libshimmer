@@ -91,6 +91,7 @@ pub struct Recipe {
     pub(crate) blurb: &'static str,
     pub(crate) credit: &'static str,
     pub(crate) needs: Glyphs,
+    pub(crate) listens: bool,
     pub(crate) summon: fn(u64) -> Box<dyn Shader>,
 }
 
@@ -117,6 +118,14 @@ impl Recipe {
         self.needs
     }
 
+    /// Whether the recipe paints the sound a host passes to [`Shimmer::hear`]: a host that hears
+    /// nothing withholds it.
+    ///
+    /// [`Shimmer::hear`]: crate::Shimmer::hear
+    pub fn listens(&self) -> bool {
+        self.listens
+    }
+
     /// Whether a shimmer can run the recipe on a terminal that draws `glyphs`.
     ///
     /// # Errors
@@ -135,6 +144,7 @@ impl fmt::Debug for Recipe {
         f.debug_struct("Recipe")
             .field("name", &self.name)
             .field("needs", &self.needs)
+            .field("listens", &self.listens)
             .finish_non_exhaustive()
     }
 }

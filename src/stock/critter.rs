@@ -14,6 +14,7 @@ pub(super) const RECIPE: Recipe = Recipe {
     blurb: "a small face reacts to the output",
     credit: OPUS,
     needs: Glyphs::BASE,
+    listens: false,
     summon: |_| Box::<Critter>::default(),
 };
 

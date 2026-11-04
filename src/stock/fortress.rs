@@ -27,6 +27,7 @@ pub(super) const RECIPE: Recipe = Recipe {
     blurb: "a dwarf digs deeper; losing is fun",
     credit: USER,
     needs: Glyphs::BASE,
+    listens: false,
     summon: |seed| Box::new(Fortress::new(seed)),
 };
 

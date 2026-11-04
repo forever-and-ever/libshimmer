@@ -85,8 +85,8 @@ fn inspect(shimmer: &Shimmer, caption: &str) {
     }
 }
 
-/// P7, P8 and P11 across the roster, through one take of the script with its own captions, one
-/// with a caption mixing narrow and wide graphemes, and a while idle.
+/// P7, P8 and P11 across the roster, through one take of the script with its own captions and
+/// song, one with a caption mixing narrow and wide graphemes in silence, and a while idle.
 #[test]
 fn every_recipe_keeps_its_promises_through_the_script() {
     for recipe in stock::ROSTER {
@@ -99,6 +99,9 @@ fn every_recipe_keeps_its_promises_through_the_script() {
                 shimmer.set_spell(cue.spell);
                 shimmer.show(caption);
                 shimmer.set_intensity(cue.intensity);
+                if !mixed {
+                    shimmer.hear(&script::sound(TICK * tick, TICK * (tick + 1)));
+                }
                 shimmer.advance(TICK);
                 inspect(&shimmer, caption);
             }
@@ -125,6 +128,7 @@ enum Command {
     Show(&'static str),
     Cast(Spell),
     Set(f64),
+    Hear(Vec<f32>),
     Advance(Duration),
 }
 
@@ -134,6 +138,7 @@ impl Command {
             Command::Show(caption) => shimmer.show(caption),
             Command::Cast(spell) => shimmer.set_spell(spell),
             Command::Set(level) => shimmer.set_intensity(crate::Intensity::new(level)),
+            Command::Hear(ref sound) => shimmer.hear(sound),
             Command::Advance(dt) => shimmer.advance(dt),
         }
     }
@@ -145,6 +150,7 @@ fn commands() -> impl Strategy<Value = Vec<Command>> {
         prop_oneof![Just(Spell::Idle), Just(Spell::Busy), Just(Spell::Wait)]
             .prop_map(Command::Cast),
         any::<f64>().prop_map(Command::Set),
+        prop::collection::vec(any::<f32>(), 0..3_000).prop_map(Command::Hear),
         (0..2_000_000_000_u64).prop_map(|nanos| Command::Advance(Duration::from_nanos(nanos))),
     ];
     prop::collection::vec(command, 0..48)

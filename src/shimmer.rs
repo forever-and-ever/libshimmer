@@ -106,6 +106,18 @@ impl Shimmer {
         self.stage.intensity = intensity;
     }
 
+    /// Hears `sound`, what the host heard since it last called: mono samples at [`SAMPLE_RATE`],
+    /// nominally from −1 to 1, of which samples that are not finite are silent. A recipe that
+    /// [listens](Recipe::listens) paints the latest, and the host's work once none arrive for a
+    /// moment.
+    ///
+    /// [`SAMPLE_RATE`]: crate::SAMPLE_RATE
+    pub fn hear(&mut self, sound: &[f32]) {
+        if self.recipe.listens {
+            self.stage.hear(sound);
+        }
+    }
+
     /// Runs the whole ticks that `dt` completes, carrying the remainder to the next call. A gap
     /// longer than [`STALE`] runs one tick and drops the remainders. Between bouts, shimmer time
     /// runs at a quarter of the host's.
@@ -221,6 +233,7 @@ mod tests {
         blurb: "",
         credit: "",
         needs: Glyphs::BASE,
+        listens: false,
         summon: |_| Box::<Recorder>::default(),
     };
 

@@ -15,6 +15,7 @@ pub(super) const RECIPE: Recipe = Recipe {
     blurb: "frost creeps in; work thaws it",
     credit: OPUS,
     needs: Glyphs::BASE,
+    listens: false,
     summon: |seed| Box::new(Frost::new(seed)),
 };
 

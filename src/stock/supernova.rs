@@ -11,6 +11,7 @@ pub(super) const RECIPE: Recipe = Recipe {
     blurb: "a star grows with output, then blows",
     credit: OPUS,
     needs: Glyphs::BASE,
+    listens: false,
     summon: |_| Box::<Supernova>::default(),
 };
 

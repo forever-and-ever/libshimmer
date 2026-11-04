@@ -27,6 +27,7 @@ pub(super) const RECIPE: Recipe = Recipe {
     blurb: "four machines take turns on the tape",
     credit: DEEPSEEK,
     needs: Glyphs::BASE,
+    listens: false,
     summon: |seed| {
         let mut rng = Rng::new(seed);
         let machine = Machine::ALL[rng.below(Machine::ALL.len())];

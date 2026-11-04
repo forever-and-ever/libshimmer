@@ -17,6 +17,7 @@ pub(super) const RECIPE: Recipe = Recipe {
     blurb: "a golden-angle seed head grows",
     credit: DEEPSEEK,
     needs: Glyphs::OCTANTS,
+    listens: false,
     summon: |_| Box::<Phyllotaxis>::default(),
 };
 

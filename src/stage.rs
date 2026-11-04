@@ -11,6 +11,8 @@ use crate::shimmer::{Intensity, Spell};
 pub(crate) const TICK_SECS: f64 = TICK.as_secs_f64();
 /// Ticks of quanta a stage remembers, a little over four seconds.
 const HISTORY: usize = 128;
+/// Samples of sound a stage keeps, the window a listening shader analyzes: about 43 ms.
+pub(crate) const HEARD: usize = 2048;
 
 /// A recipe's animation, written like a GPU shader against the [`Stage`] its shimmer hands it.
 /// Colors exist only at paint: [`Shader::tick`] sees no palette.
@@ -100,6 +102,13 @@ pub(crate) struct Stage {
     /// Quanta counted in each recent tick; `newest` indexes the last.
     history: [u32; HISTORY],
     newest: usize,
+    /// Seconds since the host last passed sound; infinite before it first does.
+    pub(crate) unheard: f64,
+    /// The latest `HEARD` samples of sound, a ring whose oldest sample `next` indexes, and whether
+    /// any arrived since the last tick.
+    sound: Vec<f32>,
+    next: usize,
+    heard: bool,
 }
 
 impl Default for Stage {
@@ -116,6 +125,10 @@ impl Default for Stage {
             captions: 0,
             history: [0; HISTORY],
             newest: 0,
+            unheard: f64::INFINITY,
+            sound: vec![0.0; HEARD],
+            next: 0,
+            heard: false,
         }
     }
 }
@@ -176,6 +189,27 @@ impl Stage {
         }
     }
 
+    /// Keeps the latest of `sound`, silencing samples that are not finite.
+    pub(crate) fn hear(&mut self, sound: &[f32]) {
+        for &sample in &sound[sound.len().saturating_sub(HEARD)..] {
+            self.sound[self.next] = if sample.is_finite() {
+                sample.clamp(-1.0, 1.0)
+            } else {
+                0.0
+            };
+            self.next = (self.next + 1) % HEARD;
+        }
+        self.heard |= !sound.is_empty();
+    }
+
+    /// The latest `HEARD` samples of sound, oldest first.
+    pub(crate) fn sound(&self) -> impl Iterator<Item = f32> + '_ {
+        self.sound[self.next..]
+            .iter()
+            .chain(&self.sound[..self.next])
+            .copied()
+    }
+
     /// Moves the stage one tick, in which `quanta` quanta arrived.
     pub(crate) fn advance(&mut self, quanta: u32) {
         self.t += TICK_SECS;
@@ -189,5 +223,11 @@ impl Stage {
         };
         self.newest = (self.newest + 1) % HISTORY;
         self.history[self.newest] = quanta;
+        self.unheard = if self.heard {
+            0.0
+        } else {
+            self.unheard + TICK_SECS
+        };
+        self.heard = false;
     }
 }

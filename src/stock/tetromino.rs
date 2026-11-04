@@ -29,6 +29,7 @@ pub(super) const RECIPE: Recipe = Recipe {
     blurb: "a bot plays a tiny Tetris well",
     credit: OPUS,
     needs: Glyphs::OCTANTS,
+    listens: false,
     summon: |_| Box::<Tetromino>::default(),
 };
 

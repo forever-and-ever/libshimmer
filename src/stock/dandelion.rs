@@ -19,6 +19,7 @@ pub(super) const RECIPE: Recipe = Recipe {
     blurb: "work sets the seeds adrift",
     credit: OPUS,
     needs: Glyphs::BASE,
+    listens: false,
     summon: |seed| Box::new(Dandelion::new(seed)),
 };
 

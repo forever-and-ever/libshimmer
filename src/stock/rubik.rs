@@ -16,6 +16,7 @@ pub(super) const RECIPE: Recipe = Recipe {
     blurb: "a two-cell puzzle solves itself",
     credit: OPUS,
     needs: Glyphs::BASE,
+    listens: false,
     summon: |_| Box::<Rubik>::default(),
 };
 

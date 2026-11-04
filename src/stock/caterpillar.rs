@@ -18,6 +18,7 @@ pub(super) const RECIPE: Recipe = Recipe {
     blurb: "an inchworm crawls; rest gives wings",
     credit: OPUS,
     needs: Glyphs::BASE,
+    listens: false,
     summon: |seed| Box::new(Caterpillar::new(seed)),
 };
 

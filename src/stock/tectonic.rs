@@ -11,6 +11,7 @@ pub(super) const RECIPE: Recipe = Recipe {
     blurb: "two plates grind and slip",
     credit: DEEPSEEK,
     needs: Glyphs::BASE,
+    listens: false,
     summon: |_| Box::<Tectonic>::default(),
 };
 

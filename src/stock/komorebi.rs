@@ -15,6 +15,7 @@ pub(super) const RECIPE: Recipe = Recipe {
     blurb: "sunlight dapples through leaves",
     credit: OPUS,
     needs: Glyphs::BASE,
+    listens: false,
     summon: |seed| Box::new(Komorebi::new(seed)),
 };
 

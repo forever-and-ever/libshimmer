@@ -15,6 +15,7 @@ pub(super) const RECIPE: Recipe = Recipe {
     blurb: "rival automata fight for the caption",
     credit: USER,
     needs: Glyphs::BASE,
+    listens: false,
     summon: |seed| Box::new(Cambrian::new(seed)),
 };
 

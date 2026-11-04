@@ -19,6 +19,7 @@ pub(super) const RECIPE: Recipe = Recipe {
     blurb: "work throws it; waiting, it sleeps",
     credit: OPUS,
     needs: Glyphs::BASE,
+    listens: false,
     summon: |seed| Box::new(YoYo::new(seed)),
 };
 

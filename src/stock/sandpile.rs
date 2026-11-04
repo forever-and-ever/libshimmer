@@ -11,6 +11,7 @@ pub(super) const RECIPE: Recipe = Recipe {
     blurb: "grains topple into an avalanche",
     credit: DEEPSEEK,
     needs: Glyphs::BASE,
+    listens: false,
     summon: |_| Box::<Sandpile>::default(),
 };
 

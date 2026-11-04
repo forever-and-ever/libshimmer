@@ -19,13 +19,15 @@ A shimmer is made from a **Recipe**: a name, a blurb, a credit, and a constructo
 
 The host tells the shimmer what it is doing. The **Spell** is `Busy` while the host produces, `Wait` while it is blocked on something external, and `Idle` otherwise; a **Bout** is a stretch of `Busy` and `Wait` between two `Idle`s, such as one turn of the codex agent. The **Intensity** is how hard the host works: a number of at least 0, where 1.0 is brisk, measuring whatever the host chooses. libshimmer converts intensity into whole units of paced work, each a **Quantum**. A host that learns of work in lumps, such as a burst of tokens, can pour them into a **Reservoir**, which drains each lump over four seconds. The **Script** is a canned bout and the rest after it, playing in a loop, with which a picker previews a recipe.
 
-A shimmer keeps its own time, in **Ticks** of 32 ms. Each frame, the host passes the time elapsed since the previous frame, and the shimmer's **Clock** converts it into whole ticks; a gap longer than one second counts as one tick. On each tick, the shader reads the **Stage**: the shimmer's time, the caption and its age, the spell and its age, the intensity, and the quanta counted so far. A shader can thus quicken as work intensifies, change while the host waits, and paint `Idle` with an animation of its own; when a bout ends, the shader is told once. Between bouts the shimmer is at **Rest**: its time runs at a quarter of the host's, and its paint settles near grey (§4).
+A host may also let a shimmer hear. The **Sound** is what the host hears, such as the music its computer plays: mono samples at `SAMPLE_RATE`, 48 kHz, passed as the host hears them. A **Listening recipe**, such as Hi-fi, paints the latest sound, and the host's work while none arrives; a picker on a host that cannot hear withholds such recipes. The script plays a song of its own.
+
+A shimmer keeps its own time, in **Ticks** of 32 ms. Each frame, the host passes the time elapsed since the previous frame, and the shimmer's **Clock** converts it into whole ticks; a gap longer than one second counts as one tick. On each tick, the shader reads the **Stage**: the shimmer's time, the caption and its age, the spell and its age, the intensity, the quanta counted so far, and the latest sound. A shader can thus quicken as work intensifies, change while the host waits, and paint `Idle` with an animation of its own; when a bout ends, the shader is told once. Between bouts the shimmer is at **Rest**: its time runs at a quarter of the host's, and its paint settles near grey (§4).
 
 To draw a frame, the host asks the shimmer for its row, passing its **Palette**, the terminal's default foreground and background colors, and its **Motion**, which says whether the mark and the letters may move. Painting changes nothing, and the paint depends only on the recipe, the seed, the commands so far, the palette, and the motion. The host lays the lead beside its own text, such as codex-tui's timer, and shades the line with the backdrop. A row is plain data; a companion crate, libshimmer-ratatui, converts it into ratatui spans and shades a ratatui buffer.
 
 One fact about a host limits which recipes it can run: the glyphs its terminal draws. Some recipes paint glyphs beyond a base set that every target terminal draws; the only such repertoire is Unicode 16's octants, and the host states, as **Glyphs**, the repertoires its terminal draws. Each recipe declares the repertoires it needs. Making a shimmer from a recipe that does not fit the host yields **Unfit** instead, naming what is missing, and a picker can ask beforehand and withhold such a recipe. Captions may hold any grapheme: CJK characters and most emoji are two cells wide, and every recipe paints them well, because paint refuses a substitute glyph whose width differs from the text it replaces.
 
-The host keeps terminal input and output; frame scheduling; the status line's layout; measuring work; detecting the terminal's colors, color depth, and glyphs; the picker; and the user's choice. libshimmer never calls out.
+The host keeps terminal input and output; frame scheduling; the status line's layout; measuring work; capturing sound; detecting the terminal's colors, color depth, and glyphs; the picker; and the user's choice. libshimmer never calls out.
 
 ## 2 Boundary
 
@@ -37,7 +39,8 @@ flowchart TB
   classDef dep fill:#fff,stroke:#888,color:#555,stroke-dasharray:4 3
 
   work["<b>Work source</b><br/>codex-tui: the app server"]:::outside
-  host["<b>Host TUI</b><br/>codex-tui, memview, …<br/>owns the terminal, frame loop,<br/>layout, work measurement,<br/>colors, motion, the choice"]:::host
+  sound["<b>Sound server</b><br/>codex-tui: PipeWire"]:::outside
+  host["<b>Host TUI</b><br/>codex-tui, memview, …<br/>owns the terminal, frame loop,<br/>layout, work measurement,<br/>sound capture, colors,<br/>motion, the choice"]:::host
   term["<b>Terminal</b>"]:::outside
   lib["<b>libshimmer</b><br/>owns the catalog, each<br/>shimmer's stage and clock,<br/>pacing, paint"]:::subject
   adapter["<b>libshimmer-ratatui</b><br/>draws rows in ratatui"]:::subject
@@ -45,8 +48,9 @@ flowchart TB
   uni["unicode-segmentation,<br/>unicode-width"]:::dep
 
   work -->|"turn, tool, usage events"| host
+  sound -->|samples| host
   host -->|frames| term
-  host -->|"recipe, seed, glyphs,<br/>caption, spell, intensity,<br/>Δt, palette, motion"| lib
+  host -->|"recipe, seed, glyphs,<br/>caption, spell, intensity,<br/>sound, Δt, palette, motion"| lib
   lib -->|"paint: Row, Ink<br/>catalog: ROSTER<br/>refusal: Unfit"| host
   lib -.-> uni
   host -->|"Row, Ink"| adapter
@@ -64,6 +68,8 @@ Blue: libshimmer's crates. White: the host. Grey: outside both. Dashed: a Cargo 
 | shimmer time: fixed ticks, skipped gaps | libshimmer | none |
 | measuring work | host | `set_intensity`, `set_spell` |
 | converting intensity into quanta | libshimmer | none |
+| capturing sound | host | `hear`, at `SAMPLE_RATE` |
+| analyzing sound | libshimmer | none |
 | caption | host | `show` |
 | terminal colors and the truecolor check | host | `Palette`, at paint |
 | reduced motion | host | `Motion`, at paint |
@@ -73,8 +79,11 @@ Blue: libshimmer's crates. White: the host. Grey: outside both. Dashed: a Cargo 
 | stock catalog | libshimmer | `ROSTER` |
 | glyphs the terminal draws | host | `Glyphs`, at `Shimmer::new` |
 | what each recipe needs | libshimmer | `Recipe::fits`, `Unfit` |
+| which recipes listen | libshimmer | `Recipe::listens` |
 
 The host passes Δt, and libshimmer owns the fixed-step accumulator and the stale cutoff: reading the wall clock would break P1 to P4, and pickers, reels, and tests run on time that is not the wall's. A row is plain data (`Row`, `Ink`, `Rgb`), so that a host on any toolkit can draw it; libshimmer-ratatui draws it with `ratatui-core` 0.1, the crate ratatui designates for widget libraries, so that libshimmer itself takes no public dependency (§7). The status line's width does not cross: the backdrop holds at most 80 columns, and the host clips the rest. The status timer does not cross either; a host without one need not invent it.
+
+Sound crosses the same way. Capturing it takes a device, a sound server, and often the user's consent, none of which P1 allows libshimmer: the host captures, and libshimmer analyzes. `hear` takes whatever the host heard since its previous call, in any amount; a shimmer keeps the latest 2048 samples, about 43 ms, and only for a listening recipe. A host that cannot hear never calls `hear`.
 
 The catalog is closed: `Shader`, `Stage`, and the shaders' shared kit are crate-private. Opening them later is a minor release, and closing them a major one; an open `Shader` would freeze the stage's members.
 
@@ -92,6 +101,7 @@ classDiagram
     +show(caption)
     +set_spell(spell)
     +set_intensity(intensity)
+    +hear(sound)
     +advance(dt)
     +status(palette, motion) Row
     +bullet(palette) Ink
@@ -99,6 +109,7 @@ classDiagram
   class Recipe {
     +needs() Glyphs
     +fits(glyphs) Result
+    +listens() bool
   }
   class ROSTER {
     <<static>>
@@ -159,6 +170,7 @@ classDiagram
     ~intensity
     ~quanta
     ~caption
+    ~sound
     ~flow(window) f64
   }
   class Shader {
@@ -195,7 +207,7 @@ The crate-private types inside a shimmer are white, with members marked `~`; blu
 | Host | A terminal program that uses libshimmer |
 | Shimmer | One recipe's shader running on its stage and clock; what a host holds |
 | Shader | The animation: reads the stage each tick and paints a row |
-| Recipe | Catalog entry: name, blurb, credit, the glyphs it needs, and a constructor for its shader |
+| Recipe | Catalog entry: name, blurb, credit, the glyphs it needs, whether it listens, and a constructor for its shader |
 | ROSTER | The stock recipes, in picker order |
 | Glyphs | A set of glyph repertoires beyond the base set every target terminal draws: those a terminal draws, or those a recipe needs; only octants so far |
 | Unfit | Why a recipe cannot load for a host: glyphs the terminal lacks |
@@ -209,6 +221,8 @@ The crate-private types inside a shimmer are white, with members marked `~`; blu
 | Intensity | How hard the host works: at least 0, where 1.0 is brisk, the most the stage shows linearly |
 | Quantum | One whole unit of paced work, as the stage counts it: 100 a second at brisk intensity, logarithmically more beyond |
 | Reservoir | Turns lumps of work into a flow, draining each over 4 s |
+| Sound | What the host hears, such as the music its computer plays: mono samples at `SAMPLE_RATE` |
+| Listening recipe | A recipe that paints sound, such as Hi-fi |
 | Caption | The text a shimmer dresses |
 | Lead | The part of the status line a shimmer paints: mark, letters, and tail |
 | Mark | Cells of glyphs before the caption, then a space; absent when the mark may not move |
@@ -243,6 +257,7 @@ stateDiagram-v2
     Any state, no transition:
     show(caption)
     set_intensity(i)
+    hear(sound)
     advance(Δt)
   end note
 ```
@@ -255,7 +270,7 @@ Busy, waiting, and between bouts are exclusive states, so they are one enum, and
 
 Rest gives every recipe one look between bouts: near grey and nearly still. While the spell is `Idle`, shimmer time runs at a quarter of the host's, and whatever the shader paints settles before the host sees it. Each ink settles toward the grey terminals dim text to, the foreground at 60% over the background: it keeps 30% of its departure from that grey, no more saturated than 16% and within 0.04 of the grey's luma. Each background keeps 35% of its departure from the palette's background, under the same saturation. The kept share swells and ebbs by 35% over eight seconds, a bout's paint eases into rest over two, and bold lets go halfway.
 
-A recipe may give rest a choreography of its own. A choreographed move comes at most once a lull and may be a brief burst, such as a moth's two wingbeats; most stock recipes rest still or drift.
+A recipe may give rest a choreography of its own. A choreographed move comes at most once a lull and may be a brief burst, such as a moth's two wingbeats; most stock recipes rest still or drift. A listening recipe follows what it hears at rest too, as though the sound were turned down, and in grey.
 
 ## 5 Protocol
 
@@ -272,6 +287,9 @@ sequenceDiagram
   loop each frame, every TICK (32 ms), in any spell
     opt work changed since the last frame
       H->>S: show, set_spell, set_intensity
+    end
+    opt sound heard since the last frame
+      H->>S: hear(sound)
     end
     H->>S: advance(Δt)
     loop each whole tick owed
@@ -294,7 +312,7 @@ Solid arrows are calls, the dashed arrow a return, open arrowheads events. `loop
 
 | # | Promise | Check |
 |---|---|---|
-| P1 | libshimmer makes no outbound call: it reads no clock or environment, spawns no thread, keeps no global state, and takes no callback. | clippy's disallowed methods and types; review |
+| P1 | libshimmer makes no outbound call: it reads no clock, device, or environment, spawns no thread, keeps no global state, and takes no callback. | clippy's disallowed methods and types; review |
 | P2 | Paint is a function of the recipe, the seed, the command sequence, the palette, and the motion. | property test: twin shimmers under one random command sequence paint alike |
 | P3 | A shimmer changes only at whole ticks: `advance(a)` then `advance(b)` equals `advance(a + b)` while `a + b` stays within `STALE`. | property test |
 | P4 | A gap longer than `STALE` (1 s) advances exactly one tick. | unit test |
@@ -302,7 +320,7 @@ Solid arrows are calls, the dashed arrow a return, open arrowheads events. `loop
 | P6 | Painting changes nothing: `status` and `bullet` take `&self`. | signature |
 | P7 | The lead spans `len(mark) + (1 if mark) + width(caption) + len(tail)` columns, and the backdrop at most 80. | by construction: paint refuses a substitute of another width; test across `ROSTER` |
 | P8 | With still letters, the letters are the caption verbatim, without styling, and the row has no tail or backdrop; a still mark is absent. | test across `ROSTER` |
-| P9 | No caption, intensity, or Δt causes a panic. | `Intensity::new` saturates; property test |
+| P9 | No caption, intensity, sound, or Δt causes a panic. | `Intensity::new` saturates; property test |
 | P10 | Ticks never read colors; colors exist only at paint. | by construction: the stage holds no palette |
 | P11 | A recipe paints only the base glyphs and the repertoires it declares. | test across `ROSTER` on every glyph of a scripted take |
 | P12 | A blurb spans at most 36 columns, so a picker shows it on one line. | test across `ROSTER` |

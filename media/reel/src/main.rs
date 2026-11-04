@@ -1,5 +1,5 @@
 //! Dumps the README reel's frames as JSON lines: every stock recipe paints its own name, driven
-//! through the preview script, rendered into a ratatui buffer exactly as a host draws it.
+//! through the preview script and its song, rendered into a ratatui buffer exactly as a host draws it.
 //!
 //! usage: reel WARM_CYCLES > frames.jsonl, as ../roster.py runs it
 
@@ -62,9 +62,11 @@ fn main() -> io::Result<()> {
     let area = Rect::new(0, 0, WIDTH, 1);
     for n in 0..per_cycle * (warm + 1) {
         let cue = script::cue(TICK * n);
+        let sound = script::sound(TICK * n, TICK * (n + 1));
         for shimmer in &mut shimmers {
             shimmer.set_spell(cue.spell);
             shimmer.set_intensity(cue.intensity);
+            shimmer.hear(&sound);
             shimmer.advance(TICK);
         }
         if n < per_cycle * warm {

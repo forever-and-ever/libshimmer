@@ -8,6 +8,7 @@ mod fireflies;
 mod forge;
 mod fortress;
 mod frost;
+mod hi_fi;
 mod komorebi;
 mod lava_lamp;
 mod lfsr;
@@ -57,6 +58,7 @@ pub static ROSTER: &[Recipe] = &[
     frost::RECIPE,
     yo_yo::RECIPE,
     fortress::RECIPE,
+    hi_fi::RECIPE,
 ];
 
 /// The stock recipe named `name`.
