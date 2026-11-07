@@ -6,7 +6,7 @@ resolver = "3"
 edition = "2024"
 rust-version = "1.88"
 license = "MIT-0"
-repository = "https://github.com/aoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoa/libshimmer"
+repository = "https://github.com/forever-and-ever/libshimmer"
 
 [package]
 name = "libshimmer"
